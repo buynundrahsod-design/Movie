@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Кино сонгогч</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="bg-grain"></div>
+
+  <div class="login-screen" id="loginScreen">
+    <div class="login-box">
+      <div class="login-logo">🎬 Кино</div>
+      <h1 class="login-title"></h1>
+      <p class="login-sub">Нууц кодоо оруулна уу</p>
+      <input
+        class="login-input"
+        id="loginInput"
+        type="password"
+        inputmode="numeric"
+        placeholder="••••"
+        maxlength="10"
+        onkeydown="if(event.key==='Enter') login()"
+      />
+      <button class="login-btn" onclick="login()">Нэвтрэх</button>
+      <p class="login-error" id="loginError"></p>
+    </div>
+  </div>
+
+  <div class="app-screen" id="appScreen" style="display:none">
+
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">🎬 Кино</div>
+        <div class="header-right">
+          <div class="sync-indicator">
+            <div class="sync-dot" id="syncDot"></div>
+            <span id="syncLabel">Холбогдож байна...</span>
+          </div>
+          <div class="user-badge" id="userBadge"></div>
+          <button class="btn-logout" onclick="logout()">Гарах</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+
+      <div class="persons-grid">
+
+        <section class="person-card" data-person="1">
+          <div class="person-header">
+            <div class="avatar av1" id="avatar1">Х</div>
+            <div style="flex:1; min-width:0;">
+              <div class="person-name" id="personName1">Халиунаа</div>
+              <div class="movie-count" id="count1">0 кино</div>
+            </div>
+          </div>
+          <div class="add-row" id="addRow1">
+            <input class="movie-input" id="input1" placeholder="Кино нэр..."
+              onkeydown="if(event.key==='Enter') addMovie(1)" />
+            <button class="btn-add" onclick="addMovie(1)">+</button>
+          </div>
+          <ul class="movie-list" id="list1">
+            <li class="empty-hint">Ачаалж байна...</li>
+          </ul>
+        </section>
+
+        <section class="person-card" data-person="2">
+          <div class="person-header">
+            <div class="avatar av2" id="avatar2">У</div>
+            <div style="flex:1; min-width:0;">
+              <div class="person-name" id="personName2">Ундрах</div>
+              <div class="movie-count" id="count2">0 кино</div>
+            </div>
+          </div>
+          <div class="add-row" id="addRow2">
+            <input class="movie-input" id="input2" placeholder="Кино нэр..."
+              onkeydown="if(event.key==='Enter') addMovie(2)" />
+            <button class="btn-add btn-add2" onclick="addMovie(2)">+</button>
+          </div>
+          <ul class="movie-list" id="list2">
+            <li class="empty-hint">Ачаалж байна...</li>
+          </ul>
+        </section>
+
+      </div>
+
+      <div class="random-section">
+        <button class="btn-random" id="randomBtn" onclick="pickRandom()" disabled>
+          <span class="btn-random-icon">🎲</span>
+          RANDOM СОНГОХ
+        </button>
+        <p class="random-hint" id="randomHint">Кино нэмэхэд товч идэвхжинэ</p>
+      </div>
+
+      <div id="result"></div>
+
+    </main>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
