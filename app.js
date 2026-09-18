@@ -1,15 +1,10 @@
-// =============================================
-//  КИНО СОНГОГЧ — app.js
-//  Нууц код → Firebase Anonymous Auth → Realtime DB sync
-// =============================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, push, remove, set }
+import { getDatabase, ref, onValue, push, remove, set, update }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 import { getAuth, signInAnonymously, signOut }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-// ---------- FIREBASE ----------
 const firebaseConfig = {
   apiKey: "AIzaSyDZYHpoIFJS1K1077G8Q4TtvAN6CVPRu18",
   authDomain: "kino-songolt.firebaseapp.com",
@@ -21,95 +16,71 @@ const firebaseConfig = {
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db  = getDatabase(firebaseApp);
+const db   = getDatabase(firebaseApp);
 const auth = getAuth(firebaseApp);
 
-// ---------- ХЭРЭГЛЭГЧИД (нууц код → хүн) ----------
 const USERS = {
-  '0804': { person: 1, name: 'Халиунаа', greeting: 'Халиунаа! 🌸', emoji: '🌸' },
-  '0405': { person: 2, name: 'Ундрах',   greeting: 'Ундрах! 🕵️',   emoji: '🕵️' },
+  '0804': { person: 1, name: 'Халиунаа', emoji: '🌸' },
+  '0405': { person: 2, name: 'Ундрах',   emoji: '🕵️' },
 };
 
-// ---------- STATE ----------
-let currentUser = null;   // { person, name, greeting, emoji }
-let localMovies = { 1: {}, 2: {} };
-let apiKey = localStorage.getItem('moviepicker_apikey') || '';
-let modalCallback = null;
+const RATING_KEYS = ['Story', 'Жүжиглэлт', 'CGI', 'Soundtrack', 'Дүрүүд', 'Хэр сэтгэлд хүрсэн', 'Төгсгөл'];
 
-// ---------- НЭВТРЭХ ----------
+let currentUser   = null;
+let localMovies   = { 1: {}, 2: {} };  // үзэх жагсаалт
+let watchedMovies = {};                 // key → movie object
+let currentPanel  = null;              // одоо нээлттэй panel-ийн movie key
+
 window.login = async function() {
-  const code = document.getElementById('loginInput').value.trim();
+  const code  = document.getElementById('loginInput').value.trim();
   const errEl = document.getElementById('loginError');
   errEl.textContent = '';
 
   if (!USERS[code]) {
     errEl.textContent = 'Буруу код байна.';
-    // shake animation дахин trigger
-    errEl.style.animation = 'none';
-    requestAnimationFrame(() => { errEl.style.animation = ''; });
     document.getElementById('loginInput').value = '';
     document.getElementById('loginInput').focus();
     return;
   }
-
   try {
     await signInAnonymously(auth);
     currentUser = USERS[code];
     showApp();
   } catch (e) {
-    errEl.textContent = 'Firebase алдаа: ' + e.message;
+    errEl.textContent = 'Алдаа: ' + e.message;
   }
 };
 
+document.getElementById('loginInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') login();
+});
+
 function showApp() {
-  // Нэвтрэх хуудас нуух
   document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appScreen').style.display = 'block';
+  document.getElementById('appScreen').style.display   = 'block';
 
-  // User badge
-  const badge = document.getElementById('userBadge');
-  badge.textContent = currentUser.emoji + ' ' + currentUser.name;
-  badge.className = 'user-badge u' + currentUser.person;
+  const chip = document.getElementById('userChip');
+  chip.textContent = currentUser.emoji + ' ' + currentUser.name;
+  chip.className   = 'user-chip u' + currentUser.person;
 
-  // Өөрийн card highlight
-  document.querySelector('.person-card[data-person="' + currentUser.person + '"]').classList.add('mine');
+  const other = currentUser.person === 1 ? 2 : 1;
+  document.getElementById('addRow' + other).classList.add('hidden');
 
-  // Өөрийн бус card-н input нуух
-  const otherPerson = currentUser.person === 1 ? 2 : 1;
-  document.getElementById('addRow' + otherPerson).classList.add('hidden');
-
-  // Мэндчилгээ banner
-  const main = document.querySelector('.main');
-  const banner = document.createElement('div');
-  banner.className = 'welcome-banner';
-  banner.innerHTML = `
-    <div class="welcome-emoji">${currentUser.emoji}</div>
-    <div>
-      <div class="welcome-text">${currentUser.greeting}</div>
-      <div class="welcome-sub">Кинонуудаа нэмээрэй</div>
-    </div>
-  `;
-  main.insertBefore(banner, main.firstChild);
-  setTimeout(() => banner.style.opacity = '0.7', 3000);
-
-  // Firebase listener эхлүүлэх
   startListeners();
 }
 
-// ---------- ГАРАХ ----------
 window.logout = async function() {
   if (!confirm('Гарах уу?')) return;
   await signOut(auth);
   location.reload();
 };
 
-// ---------- SYNC STATUS ----------
 function setSync(status) {
-  const dot = document.getElementById('syncDot');
+  const dot   = document.getElementById('syncDot');
   const label = document.getElementById('syncLabel');
   if (status === 'online') {
     dot.className = 'sync-dot online';
-    label.textContent = 'Sync холбоотой';
+    label.textContent = 'Synced · Just now';
   } else if (status === 'offline') {
     dot.className = 'sync-dot offline';
     label.textContent = 'Офлайн';
@@ -119,61 +90,69 @@ function setSync(status) {
   }
 }
 
-// ---------- FIREBASE LISTENERS ----------
 function startListeners() {
   setSync('connecting');
 
   onValue(ref(db, 'movies'), (snapshot) => {
     setSync('online');
-    const data = snapshot.val() || {};
+    const data     = snapshot.val() || {};
     localMovies[1] = data[1] || {};
     localMovies[2] = data[2] || {};
     renderList(1);
     renderList(2);
-    updateRandomBtn();
+    updateCounts();
   }, () => setSync('offline'));
+
+  onValue(ref(db, 'watched'), (snapshot) => {
+    watchedMovies = snapshot.val() || {};
+    renderWatched();
+    updateStats();
+    if (currentPanel) openPanel(currentPanel);
+  });
 }
 
-// ---------- КИНО НЭМЭХ ----------
 window.addMovie = function(person) {
-  // Зөвхөн өөрийн хэсэгт нэмэх боломжтой
   if (person !== currentUser.person) return;
-
-  const inp = document.getElementById('input' + person);
+  const inp   = document.getElementById('input' + person);
   const title = inp.value.trim();
   if (!title) return;
 
   push(ref(db, 'movies/' + person), {
-    title: title,
+    title,
     addedAt: Date.now(),
-    addedBy: currentUser.name
+    addedBy: currentUser.name,
   });
 
   inp.value = '';
   inp.focus();
 };
 
-// ---------- КИНО УСТГАХ ----------
 window.removeMovie = function(person, key) {
-  // Зөвхөн өөрийнхийг устгах боломжтой
   if (person !== currentUser.person) return;
   remove(ref(db, 'movies/' + person + '/' + key));
 };
 
-// ---------- БҮГДИЙГ АРИЛГАХ ----------
-window.clearAll = function() {
-  if (!confirm('Бүх кинонуудыг устгах уу?')) return;
-  set(ref(db, 'movies'), { 1: {}, 2: {} });
-  document.getElementById('result').innerHTML = '';
+window.markWatched = function(person, key) {
+  if (person !== currentUser.person) return;
+  const movie = localMovies[person][key];
+  if (!movie) return;
+
+  remove(ref(db, 'movies/' + person + '/' + key));
+
+  push(ref(db, 'watched'), {
+    title:     movie.title,
+    addedBy:   movie.addedBy || currentUser.name,
+    watchedAt: Date.now(),  // ← энийг дараа он/сар болгоно
+    person,
+    ratings:   { 1: {}, 2: {} },  // хоёулангийн үнэлгээ хоосон
+    reviews:   { 1: '', 2: '' },   // хоёулангийн review хоосон
+  });
 };
 
-// ---------- RENDER ----------
 function renderList(person) {
-  const list = document.getElementById('list' + person);
-  const countEl = document.getElementById('count' + person);
-  const items = Object.entries(localMovies[person]);
-
-  countEl.textContent = items.length + ' кино';
+  const list    = document.getElementById('list' + person);
+  const items   = Object.entries(localMovies[person]);
+  const isOwner = currentUser && person === currentUser.person;
 
   if (items.length === 0) {
     list.innerHTML = '<li class="empty-hint">Кино нэмж эхлээрэй</li>';
@@ -182,156 +161,299 @@ function renderList(person) {
 
   items.sort((a, b) => (a[1].addedAt || 0) - (b[1].addedAt || 0));
 
-  const isOwner = currentUser && person === currentUser.person;
-
   list.innerHTML = items.map(([key, movie]) => `
     <li class="movie-item p${person}">
       <span class="movie-item-title">${escapeHtml(movie.title)}</span>
-      ${isOwner ? `<button class="del-btn" onclick="removeMovie(${person}, '${key}')">×</button>` : ''}
+      ${isOwner ? `
+        <button class="watched-btn" title="Үзсэн" onclick="markWatched(${person},'${key}')">✓</button>
+        <button class="del-btn" onclick="removeMovie(${person},'${key}')">×</button>
+      ` : ''}
     </li>
   `).join('');
 }
 
-function updateRandomBtn() {
-  const total = Object.keys(localMovies[1]).length + Object.keys(localMovies[2]).length;
-  const btn = document.getElementById('randomBtn');
-  const hint = document.getElementById('randomHint');
-  btn.disabled = total === 0;
-  hint.textContent = total === 0
-    ? 'Кино нэмэхэд товч идэвхжинэ'
-    : `Нийт ${total} кинооос санамсаргүй сонгоно`;
+function updateCounts() {
+  const n1    = Object.keys(localMovies[1]).length;
+  const n2    = Object.keys(localMovies[2]).length;
+  const total = n1 + n2;
+
+  document.getElementById('count1').textContent     = n1;
+  document.getElementById('count2').textContent     = n2;
+  document.getElementById('countTotal').textContent = total;
+  document.getElementById('badge1').textContent     = n1 + ' movies';
+  document.getElementById('badge2').textContent     = n2 + ' movies';
+  document.getElementById('randomBtn').disabled     = total === 0;
 }
 
-// ---------- RANDOM ----------
-window.pickRandom = function() {
-  const all = [
-    ...Object.entries(localMovies[1]).map(([key, m]) => ({ key, person: 1, ...m })),
-    ...Object.entries(localMovies[2]).map(([key, m]) => ({ key, person: 2, ...m }))
-  ];
-  if (all.length === 0) return;
+function updateStats() {
+  const movies = Object.values(watchedMovies);
+  const total = movies.length;
 
-  const picked = all[Math.floor(Math.random() * all.length)];
-  const ownerName = picked.person === 1 ? 'Халиунаа' : 'Ундрах';
+  document.getElementById('statWatched').textContent = total;
 
-  // Firebase-с устгах
-  remove(ref(db, 'movies/' + picked.person + '/' + picked.key));
+  const scores = movies
+    .map(m => {
+      const r1 = m.ratings?.[1] || {};
+      const r2 = m.ratings?.[2] || {};
 
-  const resultEl = document.getElementById('result');
-  resultEl.innerHTML = `
-    <div class="result-card">
-      <div class="result-tag">✨ Сонгогдлоо</div>
-      <div class="result-title">${escapeHtml(picked.title)}</div>
-      <div class="result-owner">${ownerName}-ын сонголт жагсаалтаас хасагдлаа</div>
-      <div style="margin-top:1rem; font-size:15px; color:var(--text2)">🎬 Киногоо гоё үзье</div>
-    </div>
-  `;
-  resultEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  updateRandomBtn();
-};
+      const all = [...Object.values(r1), ...Object.values(r2)]
+        .map(Number)
+        .filter(n => !isNaN(n) && n > 0);
 
-// ---------- CLAUDE API ----------
-async function getAiReasoning(movieTitle, ownerName) {
-  const aiTextEl = document.getElementById('aiText');
-  if (!aiTextEl) return;
+      return all.length
+        ? all.reduce((a, b) => a + b, 0) / all.length
+        : null;
+    })
+    .filter(s => s !== null);
 
-  if (!apiKey) {
-    openModal(() => getAiReasoning(movieTitle, ownerName));
-    aiTextEl.innerHTML = '<span style="color:var(--text3)">API key оруулна уу...</span>';
+  if (scores.length) {
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+
+    document.getElementById('statScore').textContent = avg.toFixed(1);
+  } else {
+    document.getElementById('statScore').textContent = '—';
+  }
+}
+
+function renderWatched() {
+  const container = document.getElementById('watchedList');
+  if (!container) return;
+
+  const items = Object.entries(watchedMovies)
+    .sort((a, b) => b[1].watchedAt - a[1].watchedAt); // шинэ нь эхэнд
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-watched">Одоохондоо үзсэн кино байхгүй байна</div>';
     return;
   }
 
-  const p1list = Object.values(localMovies[1]).map(m => m.title).join(', ') || 'байхгүй';
-  const p2list = Object.values(localMovies[2]).map(m => m.title).join(', ') || 'байхгүй';
+  container.innerHTML = items.map(([key, movie]) => {
+    const d       = new Date(movie.watchedAt);
+    const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate();
 
-  const prompt = `Хоёр найз Халиунаа, Үндрах хоёр кино үзэхээр тус тусын жагсаалт гаргасан.
-Халиунаагийн жагсаалт: ${p1list}
-Үндрахын жагсаалт: ${p2list}
-Санамсаргүйгээр сонгогдсон кино: "${movieTitle}" (${ownerName}-ын санал)
-Яагаад энэ кино хамтдаа үзэхэд тохиромжтой вэ гэдгийг 1-2 өгүүлбэрээр монголоор хэлээрэй. Товч, хөгжилтэй байдлаар.`;
+    const r1  = movie.ratings?.[1] || {};
+    const r2  = movie.ratings?.[2] || {};
+    const all = [...Object.values(r1), ...Object.values(r2)]
+      .map(Number).filter(n => !isNaN(n) && n > 0);
+    const avg = all.length ? (all.reduce((a,b) => a+b,0) / all.length).toFixed(1) : null;
 
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 200,
-        stream: true,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.json();
-      aiTextEl.innerHTML = `<span style="color:#e85a5a">Алдаа: ${err.error?.message || 'API алдаа'}</span>`;
-      return;
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let text = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value, { stream: true });
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data: ')) continue;
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const json = JSON.parse(data);
-          if (json.type === 'content_block_delta' && json.delta?.text) {
-            text += json.delta.text;
-            aiTextEl.innerHTML = escapeHtml(text) + '<span class="ai-typing"></span>';
-          }
-        } catch (_) {}
-      }
-    }
-    aiTextEl.innerHTML = escapeHtml(text);
-
-  } catch (e) {
-    aiTextEl.innerHTML = `<span style="color:var(--text3)">AI холбогдсонгүй.</span>`;
-  }
+    return `
+      <div class="watched-card" onclick="openPanel('${key}')">
+        <div>
+          <div class="watched-card-title">${escapeHtml(movie.title)}</div>
+          <div class="watched-card-meta">${movie.addedBy} · Watched · ${dateStr}</div>
+        </div>
+        <div class="watched-card-score">
+          ${avg ? `<span class="score-star">⭐</span><span class="score-val">${avg}</span>` : ''}
+          <div class="watched-card-badge">✓ Watched</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
-// ---------- MODAL ----------
-window.openModal = function(cb) {
-  modalCallback = cb || null;
-  document.getElementById('modalOverlay').classList.add('open');
-  const inp = document.getElementById('apiKeyInput');
-  inp.value = apiKey || '';
-  setTimeout(() => inp.focus(), 100);
-};
-window.closeModal = function() {
-  document.getElementById('modalOverlay').classList.remove('open');
-};
-window.saveKey = function() {
-  const val = document.getElementById('apiKeyInput').value.trim();
-  if (!val) { alert('API key оруулна уу'); return; }
-  apiKey = val;
-  localStorage.setItem('moviepicker_apikey', apiKey);
-  closeModal();
-  if (modalCallback) { modalCallback(); modalCallback = null; }
-};
-document.getElementById('modalOverlay').addEventListener('click', function(e) {
-  if (e.target === this) closeModal();
-});
-document.getElementById('apiKeyInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') saveKey();
-});
-document.getElementById('loginInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') login();
-});
+window.openPanel = function(key) {
+  currentPanel = key;
+  const movie  = watchedMovies[key];
+  if (!movie) return;
 
-// ---------- UTIL ----------
+  const d       = new Date(movie.watchedAt);
+  const dateStr = d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate();
+
+  const r1 = movie.ratings?.[1] || {};
+  const r2 = movie.ratings?.[2] || {};
+
+  const all = [...Object.values(r1), ...Object.values(r2)]
+    .map(Number).filter(n => !isNaN(n) && n > 0);
+  const avg = all.length ? (all.reduce((a,b) => a+b,0) / all.length).toFixed(1) : '—';
+
+  const p = currentUser.person;
+
+  document.getElementById('panelTitle').textContent = 'Movie Details';
+  document.getElementById('panelBody').innerHTML = `
+
+    <!-- Кино нэр + мэдээлэл -->
+    <div class="panel-movie-title">${escapeHtml(movie.title)}</div>
+    <div class="panel-meta">
+      <span class="panel-watched-badge">✓ Үзсээн</span>
+      <span class="panel-date">📅 ${dateStr}</span>
+    </div>
+
+    <!-- OUR SCORE -->
+    <div class="our-score-box">
+      <div class="our-score-label">Бидний үнэлгээ</div>
+      <div class="our-score-num">
+        <span class="our-score-star">⭐</span>
+        ${avg}
+        <span class="our-score-denom">/ 10</span>
+      </div>
+    </div>
+
+    <!-- RATINGS харуулах -->
+    <div class="panel-section">
+      <div class="panel-section-title">Оноолт</div>
+      <div class="ratings-grid">
+        ${renderRatingCol(1, '🌸 Халиунаа', r1)}
+        ${renderRatingCol(2, '🕵️ Ундрах', r2)}
+      </div>
+    </div>
+
+    <!-- ҮНЭЛГЭЭ ОРУУЛАХ — товч дарах хэлбэр -->
+    <div class="panel-section">
+      <div class="panel-section-title">${currentUser.emoji} ${currentUser.name} — Үнэлгээ өгөх</div>
+      <div class="btn-rating-list">
+        ${RATING_KEYS.map(k => {
+          const cur = p === 1 ? (r1[k] ?? null) : (r2[k] ?? null);
+          return `
+            <div class="btn-rating-row">
+              <span class="btn-rating-label">${k}</span>
+              <div class="btn-rating-nums">
+                ${[1,2,3,4,5,6,7,8,9,10].map(n => `
+                  <button
+                    class="rnum-btn ${cur === n ? 'rnum-active' : ''}"
+                    data-cat="${k}"
+                    data-val="${n}"
+                    onclick="selectRating('${key}', '${k}', ${n})"
+                  >${n}</button>
+                `).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- REVIEWS -->
+    <div class="panel-section">
+      <div class="panel-section-title">Сэтгэгдэл</div>
+      <div class="review-grid">
+        ${renderReviewCol(key, 1, '🌸 Халиунаа', movie.reviews?.[1] || '', p)}
+        ${renderReviewCol(key, 2, '🕵️ Ундрах',   movie.reviews?.[2] || '', p)}
+      </div>
+    </div>
+
+
+  `;
+
+  document.getElementById('panelOverlay').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+};
+
+function renderRatingCol(person, name, ratings) {
+  const vals = RATING_KEYS.map(k => ({
+    key: k,
+    val: ratings[k] !== undefined ? ratings[k] : '—'
+  }));
+
+  return `
+    <div class="rating-col">
+      <div class="rating-col-name">${name}</div>
+      ${vals.map(({key, val}) => `
+        <div class="rating-row">
+          <span class="rating-label">${key}</span>
+          <span class="rating-val">${val}</span>
+        </div>
+      `).join('')}
+      <div class="rating-overall">
+        <span class="rating-label">Нийт үнэлгээ</span>
+        <span class="rating-val">${calcAvg(Object.values(ratings))}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderReviewCol(key, person, name, text, myPerson) {
+  const isMe = person === myPerson;
+  return `
+    <div class="review-col">
+      <div class="review-col-name">
+        ${name}
+        ${isMe ? `<button class="review-edit-btn" onclick="toggleReviewEdit('${key}',${person})">Edit</button>` : ''}
+      </div>
+      <div id="reviewText_${person}">
+        ${text
+          ? `<div class="review-text">${escapeHtml(text)}</div>`
+          : `<div class="review-text" style="color:var(--text3)">ОБСООО...</div>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+window.toggleReviewEdit = function(key, person) {
+  const container = document.getElementById('reviewText_' + person);
+  const movie     = watchedMovies[key];
+  const existing  = movie?.reviews?.[person] || '';
+
+  container.innerHTML = `
+    <textarea class="review-textarea" id="reviewArea_${person}" placeholder="Киноны талаарх бодлоо бичээрэ...">${escapeHtml(existing)}</textarea>
+    <button class="review-save-btn" onclick="saveReview('${key}', ${person})">Хадгалах</button>
+  `;
+  document.getElementById('reviewArea_' + person).focus();
+};
+
+window.saveReview = function(key, person) {
+  const val = document.getElementById('reviewArea_' + person)?.value?.trim() || '';
+  update(ref(db, 'watched/' + key + '/reviews'), { [person]: val });
+};
+
+window.selectRating = function(key, category, val) {
+  const p = currentUser.person;
+
+  update(ref(db, 'watched/' + key + '/ratings/' + p), { [category]: val });
+
+  const allBtns = document.querySelectorAll('.rnum-btn[data-cat="' + category + '"]');
+  allBtns.forEach(btn => {
+    btn.classList.remove('rnum-active');
+    if (parseInt(btn.dataset.val) === val) {
+      btn.classList.add('rnum-active');
+    }
+  });
+};
+
+window.closePanel = function() {
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+  currentPanel = null;
+};
+
+window.pickRandom = function() {
+  const all = [
+    ...Object.entries(localMovies[1]).map(([key, m]) => ({ key, person: 1, ...m })),
+    ...Object.entries(localMovies[2]).map(([key, m]) => ({ key, person: 2, ...m })),
+  ];
+  if (all.length === 0) return;
+
+  const picked    = all[Math.floor(Math.random() * all.length)];
+  const ownerName = picked.person === 1 ? 'Халиунаа' : 'Ундрах';
+
+  remove(ref(db, 'movies/' + picked.person + '/' + picked.key));
+  push(ref(db, 'watched'), {
+    title:     picked.title,
+    addedBy:   ownerName,
+    watchedAt: Date.now(),
+    person:    picked.person,
+    ratings:   { 1: {}, 2: {} },
+    reviews:   { 1: '', 2: '' },
+  });
+
+  document.getElementById('result').innerHTML = `
+    <div class="result-card">
+      <span class="result-tag">✨ Сонгогдлоо</span>
+      <div class="result-title">${escapeHtml(picked.title)}</div>
+      <div class="result-owner">${ownerName}-ын сонголт · үзсэн жагсаалтад нэмэгдлээ</div>
+    </div>
+  `;
+};
+
+function calcAvg(vals) {
+  const nums = vals.map(Number).filter(n => !isNaN(n) && n > 0);
+  if (!nums.length) return '—';
+  return (nums.reduce((a,b) => a+b, 0) / nums.length).toFixed(1);
+}
+
 function escapeHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
