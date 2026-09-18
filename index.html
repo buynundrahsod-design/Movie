@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Кино сонгогч</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -31,76 +31,130 @@
     </div>
   </div>
 
-  <div class="app-screen" id="appScreen" style="display:none">
-
-    <header class="header">
+  <header class="header">
       <div class="header-inner">
-        <div class="logo">🎬 Кино</div>
+        <div class="header-left">
+          <div class="logo">🎬 Кино</div>
+        </div>
         <div class="header-right">
+          <div class="user-chip" id="userChip"></div>
+          <button class="btn-logout" onclick="logout()">Гарах</button>
           <div class="sync-indicator">
             <div class="sync-dot" id="syncDot"></div>
             <span id="syncLabel">Холбогдож байна...</span>
           </div>
-          <div class="user-badge" id="userBadge"></div>
-          <button class="btn-logout" onclick="logout()">Гарах</button>
         </div>
       </div>
     </header>
 
-    <main class="main">
+  <div class="app" id="appScreen" style="display:none">
 
-      <div class="persons-grid">
+    <div class="layout">
 
-        <section class="person-card" data-person="1">
-          <div class="person-header">
-            <div class="avatar av1" id="avatar1">Х</div>
-            <div style="flex:1; min-width:0;">
-              <div class="person-name" id="personName1">Халиунаа</div>
-              <div class="movie-count" id="count1">0 кино</div>
+      <aside class="sidebar">
+
+        <div class="picker-card">
+          <div class="picker-title">Кино сонгогч</div>
+          <div class="picker-sub">Дараан юу үзэх үү?</div>
+          <button class="btn-pick" id="randomBtn" onclick="pickRandom()" disabled>
+            🎲 Санамсаргүй сонгох
+          </button>
+          <div class="picker-counts">
+            <div class="pcount">
+              <div class="pcount-emoji">🌸</div>
+              <div class="pcount-name">ГҮНЖ Халиунаа</div>
+              <div class="pcount-num" id="count1">0</div>
+              <div class="pcount-label">кино</div>
             </div>
+            <div class="pcount">
+              <div class="pcount-emoji">🕵️</div>
+              <div class="pcount-name">Хайр нь</div>
+              <div class="pcount-num" id="count2">0</div>
+              <div class="pcount-label">кино</div>
+            </div>
+            <div class="pcount">
+              <div class="pcount-emoji">🗂</div>
+              <div class="pcount-name">Нийт</div>
+              <div class="pcount-num" id="countTotal">0</div>
+              <div class="pcount-label">кино</div>
+            </div>
+          </div>
+        </div>
+
+        <div id="result"></div>
+
+        <div class="list-card">
+          <div class="list-card-header">
+            <span class="list-avatar">🌸</span>
+            <span class="list-name">Халиунаа</span>
+            <span class="list-count" id="badge1">0 Кино</span>
           </div>
           <div class="add-row" id="addRow1">
-            <input class="movie-input" id="input1" placeholder="Кино нэр..."
+            <input class="movie-input" id="input1" placeholder="Киногоо нэмээрэй..."
               onkeydown="if(event.key==='Enter') addMovie(1)" />
-            <button class="btn-add" onclick="addMovie(1)">+</button>
+            <button class="btn-add av1-btn" onclick="addMovie(1)">Нэмэх</button>
           </div>
           <ul class="movie-list" id="list1">
-            <li class="empty-hint">Ачаалж байна...</li>
+            <li class="empty-hint">Киногоо нэмээрэй</li>
           </ul>
-        </section>
+        </div>
 
-        <section class="person-card" data-person="2">
-          <div class="person-header">
-            <div class="avatar av2" id="avatar2">У</div>
-            <div style="flex:1; min-width:0;">
-              <div class="person-name" id="personName2">Ундрах</div>
-              <div class="movie-count" id="count2">0 кино</div>
-            </div>
+        <div class="list-card">
+          <div class="list-card-header">
+            <span class="list-avatar">🕵️</span>
+            <span class="list-name">Ундрах</span>
+            <span class="list-count" id="badge2">0 Кино</span>
           </div>
           <div class="add-row" id="addRow2">
-            <input class="movie-input" id="input2" placeholder="Кино нэр..."
+            <input class="movie-input" id="input2" placeholder="Киногоо нэмээрэй..."
               onkeydown="if(event.key==='Enter') addMovie(2)" />
-            <button class="btn-add btn-add2" onclick="addMovie(2)">+</button>
+            <button class="btn-add av2-btn" onclick="addMovie(2)">Нэмэх</button>
           </div>
           <ul class="movie-list" id="list2">
-            <li class="empty-hint">Ачаалж байна...</li>
+            <li class="empty-hint">Киногоо нэмээрэй</li>
           </ul>
-        </section>
+        </div>
 
-      </div>
+      </aside>
 
-      <div class="random-section">
-        <button class="btn-random" id="randomBtn" onclick="pickRandom()" disabled>
-          <span class="btn-random-icon">🎲</span>
-          RANDOM СОНГОХ
-        </button>
-        <p class="random-hint" id="randomHint">Кино нэмэхэд товч идэвхжинэ</p>
-      </div>
+      <main class="content">
 
-      <div id="result"></div>
+        <div class="journey-card">
+          <div class="journey-title">🎬 Нууц</div>
+          <div class="journey-stats">
+            <div class="stat-box">
+              <div class="stat-icon">✅</div>
+              <div class="stat-num" id="statWatched">0</div>
+              <div class="stat-label">Үзсэн</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-icon">📈</div>
+              <div class="stat-num" id="statScore">—</div>
+              <div class="stat-label">Нийт дундаж үнэлгэээ</div>
+            </div>
+          </div>
+        </div>
 
-    </main>
+        <div class="section-header">
+          <span class="section-icon">🕐</span>
+          <span class="section-title">Өмнө үзсэн</span>
+        </div>
+        <div class="watched-grid" id="watchedList">
+          <div class="empty-watched">Одоохондоо үзсэн кино байхгүй байна</div>
+        </div>
 
+      </main>
+
+    </div>
+  </div>
+
+  <div class="panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="panel-header">
+      <div class="panel-title" id="panelTitle">Киноны дэлгэрэнгүй</div>
+      <button class="panel-close" onclick="closePanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panelBody"></div>
   </div>
 
   <script type="module" src="app.js"></script>
